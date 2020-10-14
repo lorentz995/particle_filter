@@ -1,0 +1,3 @@
+int8 message		# data about connection settings
+---
+bool ack 			# acknowledged informations

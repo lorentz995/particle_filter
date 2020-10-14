@@ -1,0 +1,12 @@
+{
+  "base_frame": "encoder",
+  "odom_frame": "odom",
+  "odom_topic": "/encoder/odom",
+  "publish_odom": true,
+  "queue_size_odom": 1,
+  "tf_broadcast": true,
+  "path_topic": "/encoder/path",
+  "publish_path": true,
+  "queue_size_path": 1,
+  "distance_thr": 0.1
+}
