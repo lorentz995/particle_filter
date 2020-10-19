@@ -156,9 +156,26 @@ class GPS(Sensor):
             odom.header.frame_id = self.__odom_frame
             # set the position
             odom.pose.pose = Pose(Point(current_x, current_y, 0.), Quaternion(*quat))
+            # set the covariance of the position
+            diag = 0.017
+            odom.pose.covariance = [diag,0.0,0.0,0.0,0.0,0.0,
+                                    0.0,diag,0.0,0.0,0.0,0.0,
+                                    0.0,0.0,diag,0.0,0.0,0.0,
+                                    0.0,0.0,0.0,diag,0.0,0.0,
+                                    0.0,0.0,0.0,0.0,diag,0.0,
+                                    0.0,0.0,0.0,0.0,0.0,diag] 
+
             # set the velocity
             odom.child_frame_id = self.__base_frame
             odom.twist.twist = Twist(Vector3(vx, vy, 0), Vector3(0, 0, v_yaw))
+            # set the covariance of the velocity
+            odom.twist.covariance = [diag,0.0,0.0,0.0,0.0,0.0,
+                                    0.0,diag,0.0,0.0,0.0,0.0,
+                                    0.0,0.0,diag,0.0,0.0,0.0,
+                                    0.0,0.0,0.0,diag,0.0,0.0,
+                                    0.0,0.0,0.0,0.0,diag,0.0,
+                                    0.0,0.0,0.0,0.0,0.0,diag] 
+
             # publish the message
             # print(odom)
             self.__odom_publisher.publish(odom)

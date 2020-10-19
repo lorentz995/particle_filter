@@ -47,12 +47,14 @@ class RGBCamera(Sensor):
         if self.__publisher_raw is not None:
             img_raw = self.__bridge.cv2_to_imgmsg(img_fixed, "rgb8")
             img_raw.header.frame_id = self.__camera_frame
+            img_raw.header.stamp = rospy.Time.now()
             self.__publisher_raw.publish(img_raw)
 
         if self.__publisher_compressed is not None:
             img_rgb = cv2.cvtColor(img_fixed, cv2.COLOR_BGR2RGB)
             img_compressed = self.__bridge.cv2_to_compressed_imgmsg(img_rgb)
             img_compressed.header.frame_id = self.__camera_frame
+            img_compressed.header.stamp = rospy.Time.now()
             self.__publisher_compressed.publish(img_compressed)
 
     def build_camera_info_msg(self, obs_settings):
