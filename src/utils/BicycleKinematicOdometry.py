@@ -160,7 +160,7 @@ class BicycleKinematicOdometry:
         # Compute vehicle orientation angle
         # change steering sign to be compliance with UE4 gps data
         if(rotationSign == 1):
-            yawAngle = wheelsSteerAngle * (-1) # this value is in degree
+            yawAngle = wheelsSteerAngle * (-1)  # this value is in degree
         else:
             yawAngle = wheelsSteerAngle   # this value is in degree
 
@@ -191,11 +191,12 @@ class BicycleKinematicOdometry:
 
     def carTrajector(self, wheelsSteerAngle, wheelsRotationAngle, delta_t):
         '''
-        This method compute the absolute pose from new data. 
+        This method compute the absolute pose from new data.
         The fixed Reference system used here is the one that the car have before its first shift
         '''
         # compute the odometry data
-        newPoseArray = self.OdometryCar(wheelsSteerAngle, wheelsRotationAngle, delta_t)
+        newPoseArray = self.OdometryCar(
+            wheelsSteerAngle, wheelsRotationAngle, delta_t)
 
         # save data from previous step
         oldPose = np.array(
