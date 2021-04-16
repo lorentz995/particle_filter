@@ -58,51 +58,22 @@ class ParticleFilter:
         self.map_frame = "map"  # the name of the map coordinate
         self.odom_frame = "odom"
         self.scan_topic = "base_scan"
-        self.n_particles = 500
+        self.n_particles = 1000
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
 
         self.particle_cloud = []
 
         self.current_odom_xy_theta = []
 
+        '''
         # request the map from the map server, the map should be of type nav_msgs/OccupancyGrid
-        # TODO: Cambiare ServiProxy con un subscriber a octomap
+        
         # self.map_server = rospy.ServiceProxy('octomap_full', GetOctomap)
         # self.map = self.map_server().map
         # for now we have commented out the occupancy field initialization until you can successfully fetch the map
 
-
-
-        # rospy.spin()
-
-
-
+        # rospy.spin() '''
         self.initialized = True
-
-    def initialize_particle_cloud(self, map, xy_theta=(0.0, 0.0, 0.0)):
-        #if xy_theta is None:
-           #xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
-        rad = map.info.width*map.info.resolution/2  # meters
-
-        self.particle_cloud = []
-        self.particle_cloud.append(Particle(0.0, 0.0, 0.0)) # origine robot ??
-        for i in range(self.n_particles-1):
-            # initial facing of the particle
-            theta = random.random() * 360
-
-            # compute params to generate x,y in a circle
-            other_theta = random.random() * 360
-            radius = random.random() * rad
-            # x => straight ahead
-            x = radius * math.sin(other_theta) + ((map.info.width - map.info.origin.position.x)*map.info.resolution)/2 # origine.x
-            y = radius * math.cos(other_theta) + ((map.info.height - map.info.origin.position.y)*map.info.resolution)/2 # origine.y
-            particle = Particle(x, y, theta)
-            self.particle_cloud.append(particle)
-        return self.particle_cloud
-
-
-        #self.normalize_particles()
-        #self.update_robot_pose()
 
     def publish_particles(self, msg):
         particles_conv = []
@@ -110,24 +81,52 @@ class ParticleFilter:
             particles_conv.append(p.as_pose())
         # actually send the message so that we can view it in rviz
         self.particle_pub.publish(PoseArray(header=Header(stamp=rospy.Time.now(),
-                                            frame_id=self.map_frame),
-                                  poses=particles_conv))
+                                                          frame_id=self.map_frame),
+                                            poses=particles_conv))
+
+    def initialize_particle_cloud(self, map, xy_theta=(0.0, 0.0, 0.0)):
+        # if xy_theta is None:
+        # xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
+        rad_min = map.info.width * map.info.resolution / 2  # meters
+        rad_max = map.info.height * map.info.resolution / 2
+        self.particle_cloud = []
+        self.particle_cloud.append(Particle(0.0, 0.0, 0.0))  # origine robot ??
+        for i in range(self.n_particles - 1):
+            # initial facing of the particle
+            theta = random.random() * 360
+
+            # compute params to generate x,y in a circle
+            other_theta = random.random() * 360
+            radius_min = random.random() * rad_min
+            radius_max = random.random() * rad_max
+            # x => straight ahead
+            x = radius_min * math.sin(other_theta) + (
+                    (map.info.width - map.info.origin.position.x) * map.info.resolution) / 2  # origine.x
+            y = radius_max * math.cos(other_theta) + (
+                    (map.info.height - map.info.origin.position.y) * map.info.resolution) / 2  # origine.y
+            particle = Particle(x, y, theta)
+            self.particle_cloud.append(particle)
+        p.publish_particles(self.particle_cloud)
+
+        return self.particle_cloud
+
+        # self.normalize_particles()
+        # self.update_robot_pose()
+
 
 def load_map(map):
-    occupancy_field = OccupancyField(map)
-    particle_cloud = n.initialize_particle_cloud(map)
-    n.publish_particles(particle_cloud)
+    # occupancy_field = OccupancyField(map)
+    print("seconda callback")
 
 
 if __name__ == '__main__':
     try:
-        n = ParticleFilter()
-        r = rospy.Rate(1)
-        while not rospy.is_shutdown():
-            rospy.Subscriber("/projected_map", OccupancyGrid, load_map)
-            #particle_cloud = n.initialize_particle_cloud()
-            #n.publish_particles(particle_cloud)
-            r.sleep()
+        p = ParticleFilter()
+        time.sleep(0.3)
+        rospy.Subscriber("/projected_map", OccupancyGrid, p.initialize_particle_cloud)
+        # rospy.Subscriber("/projected_map", OccupancyGrid, load_map)
+        rospy.spin()
 
     except rospy.ROSInterruptException:
-        print('dioboia')
+        print('Main Error')
+        pass
