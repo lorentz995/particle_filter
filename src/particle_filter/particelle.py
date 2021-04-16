@@ -17,7 +17,7 @@ from tf import TransformListener
 from tf import TransformBroadcaster
 from tf.transformations import euler_from_quaternion, rotation_matrix, quaternion_from_matrix
 from random import gauss
-from progetto.utils import OccupancyField
+from particle_filter.utils import OccupancyField
 from nav_msgs.msg import OccupancyGrid
 
 import math
