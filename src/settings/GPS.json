@@ -1,5 +1,5 @@
 {
-  "base_frame": "gps",
+  "base_frame": "base_link",
   "odom_frame": "odom",
   "odom_topic": "/gps/odom",
   "publish_odom": true,
