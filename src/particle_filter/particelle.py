@@ -59,25 +59,26 @@ class ParticleFilter:
         rad_max = map.info.height * map.info.resolution / 2
         self.particle_cloud = []
         # self.particle_cloud.append(Particle(0.0, 0.0, 0.0))  # origine robot ??
-        for i in range(self.n_particles - 1):
+
+        while len(self.particle_cloud) < self.n_particles:
             # initial facing of the particle
             theta = random.random() * 360
 
             # compute params to generate x,y in a circle
             # other_theta = random.random() * 360
-            radius_min = random.normalvariate(0, 0.5) * rad_min
-            radius_max = random.normalvariate(0, 0.5) * rad_max
-            # TODO: provare a fare una distribuzione Gaussiana quadrata centrata sul robot
-            x = radius_min  + (
-                    (map.info.width - map.info.origin.position.x) * map.info.resolution) / 2
-            y = radius_max  + (
-                    (map.info.height - map.info.origin.position.y) * map.info.resolution) / 2
+            radius_min = random.normalvariate(1, 0.5) * rad_min
+            radius_max = random.normalvariate(1, 0.5) * rad_max
+
+            x = radius_min + ((map.info.width - map.info.origin.position.x) * map.info.resolution) / 2
+            y = radius_max + ((map.info.height - map.info.origin.position.y) * map.info.resolution) / 2
             particle = Particle(x, y, theta)
-            if (abs(x/map.info.resolution)) < map.info.width and (abs(y/map.info.resolution)) < map.info.height:
+            if 0 < (x/map.info.resolution) < map.info.width and 0 < (y/map.info.resolution) < map.info.height:
                 self.particle_cloud.append(particle)
             else:
-                print("particella fuori")
+                print(x,y)
+
         p.publish_particles(self.particle_cloud)
+
 
         return self.particle_cloud
 
