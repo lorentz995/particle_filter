@@ -31,10 +31,10 @@ class ParticleFilter:
         self.initialized = False
         rospy.init_node('Particle_Filter')
         self.base_frame = "base_link"  # the frame of the robot base
-        self.map_frame = "map"  # the name of the map coordinate
+        self.map_frame = "base_link"  # the name of the map coordinate
         self.odom_frame = "odom"
         self.scan_topic = "base_scan"
-        self.n_particles = 1500
+        self.n_particles = 1000
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
 
         self.particle_cloud = []
@@ -55,8 +55,9 @@ class ParticleFilter:
     def initialize_particle_cloud(self, map, xy_theta=(0.0, 0.0, 0.0)): # al posto di 0 0 0 c'è odom
         # if xy_theta is None:
         # xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
-        rad_min = map.info.width * map.info.resolution / 2  # meters
-        rad_max = map.info.height * map.info.resolution / 2
+        rad_min = map.info.width * map.info.resolution /2 # meters
+        rad_max = map.info.height * map.info.resolution /2
+        #print(rad_max, rad_min)
         self.particle_cloud = []
         # self.particle_cloud.append(Particle(0.0, 0.0, 0.0))  # origine robot ??
 
@@ -66,16 +67,14 @@ class ParticleFilter:
 
             # compute params to generate x,y in a circle
             # other_theta = random.random() * 360
-            radius_min = random.normalvariate(1, 0.5) * rad_min
-            radius_max = random.normalvariate(1, 0.5) * rad_max
+            x = random.normalvariate((map.info.width - map.info.origin.position.x) * map.info.resolution /2, rad_min/3) #* rad_min
+            y = random.normalvariate((map.info.height - map.info.origin.position.y) * map.info.resolution/2, rad_max/3) #* rad_max
 
-            x = radius_min + ((map.info.width - map.info.origin.position.x) * map.info.resolution) / 2
-            y = radius_max + ((map.info.height - map.info.origin.position.y) * map.info.resolution) / 2
             particle = Particle(x, y, theta)
             if 0 < (x/map.info.resolution) < map.info.width and 0 < (y/map.info.resolution) < map.info.height:
                 self.particle_cloud.append(particle)
             else:
-                print(x,y)
+               print(x,y)
 
         p.publish_particles(self.particle_cloud)
 
@@ -91,10 +90,11 @@ def load_map(map):
 if __name__ == '__main__':
     try:
         p = ParticleFilter()
+
         time.sleep(0.3)
         rospy.Subscriber("/projected_map", OccupancyGrid, p.initialize_particle_cloud)
         # rospy.Subscriber("/projected_map", OccupancyGrid, callback)
-        rospy.spin()
+        # rospy.spin()
 
     except rospy.ROSInterruptException:
         print('Main Error')
