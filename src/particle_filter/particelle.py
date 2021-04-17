@@ -34,7 +34,7 @@ class ParticleFilter:
         self.map_frame = "map"  # the name of the map coordinate
         self.odom_frame = "odom"
         self.scan_topic = "base_scan"
-        self.n_particles = 1000
+        self.n_particles = 1500
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
 
         self.particle_cloud = []
@@ -52,28 +52,31 @@ class ParticleFilter:
                                                           frame_id=self.map_frame),
                                             poses=particles_conv))
 
-    def initialize_particle_cloud(self, map, xy_theta=(0.0, 0.0, 0.0)):
+    def initialize_particle_cloud(self, map, xy_theta=(0.0, 0.0, 0.0)): # al posto di 0 0 0 c'è odom
         # if xy_theta is None:
         # xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
         rad_min = map.info.width * map.info.resolution / 2  # meters
         rad_max = map.info.height * map.info.resolution / 2
         self.particle_cloud = []
-        self.particle_cloud.append(Particle(0.0, 0.0, 0.0))  # origine robot ??
+        # self.particle_cloud.append(Particle(0.0, 0.0, 0.0))  # origine robot ??
         for i in range(self.n_particles - 1):
             # initial facing of the particle
             theta = random.random() * 360
 
             # compute params to generate x,y in a circle
-            other_theta = random.random() * 360
-            radius_min = random.random() * rad_min
-            radius_max = random.random() * rad_max
-            # x => straight ahead
-            x = radius_min * math.sin(other_theta) + (
+            # other_theta = random.random() * 360
+            radius_min = random.normalvariate(0, 0.5) * rad_min
+            radius_max = random.normalvariate(0, 0.5) * rad_max
+            # TODO: provare a fare una distribuzione Gaussiana quadrata centrata sul robot
+            x = radius_min  + (
                     (map.info.width - map.info.origin.position.x) * map.info.resolution) / 2
-            y = radius_max * math.cos(other_theta) + (
+            y = radius_max  + (
                     (map.info.height - map.info.origin.position.y) * map.info.resolution) / 2
             particle = Particle(x, y, theta)
-            self.particle_cloud.append(particle)
+            if (abs(x/map.info.resolution)) < map.info.width and (abs(y/map.info.resolution)) < map.info.height:
+                self.particle_cloud.append(particle)
+            else:
+                print("particella fuori")
         p.publish_particles(self.particle_cloud)
 
         return self.particle_cloud
@@ -89,7 +92,7 @@ if __name__ == '__main__':
         p = ParticleFilter()
         time.sleep(0.3)
         rospy.Subscriber("/projected_map", OccupancyGrid, p.initialize_particle_cloud)
-        # rospy.Subscriber("/projected_map", OccupancyGrid, load_map)
+        # rospy.Subscriber("/projected_map", OccupancyGrid, callback)
         rospy.spin()
 
     except rospy.ROSInterruptException:
