@@ -5,7 +5,8 @@ import rospy
 
 from std_msgs.msg import Header, String
 from sensor_msgs.msg import LaserScan
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, Pose, Point, Quaternion
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, \
+    Pose, Point, Quaternion
 from nav_msgs.srv import GetMap
 from copy import deepcopy
 
@@ -106,9 +107,20 @@ class OccupancyField(object):
             return float('nan')
         return self.closest_occ[ind]
 
+def convert_translation_rotation_to_pose(translation, rotation):
+    """ Convert from representation of a pose as translation and rotation (Quaternion) tuples to a geometry_msgs/Pose message """
+    return Pose(position=Point(x=translation[0],y=translation[1],z=translation[2]), orientation=Quaternion(x=rotation[0],y=rotation[1],z=rotation[2],w=rotation[3]))
 
-'''def convert_pose_to_xy_and_theta(pose):
+def convert_pose_inverse_transform(pose):
+    """ Helper method to invert a transform (this is built into the tf C++ classes, but ommitted from Python) """
+    translation = np.zeros((4,1))
+    translation[0] = -pose.position.x
+    translation[1] = -pose.position.y
+    translation[2] = -pose.position.z
+    translation[3] = 1.0
+
+def convert_pose_to_xy_and_theta(pose):
     """ Convert pose (geometry_msgs.Pose) to a (x,y,yaw) tuple """
-    orientation_tuple = (pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w)
+    orientation_tuple = (pose[1][0], pose[1][1], pose[1][2], pose[1][3])
     angles = euler_from_quaternion(orientation_tuple)
-    return pose.position.x, pose.position.y, angles[2]'''
+    return pose[0][0], pose[0][1], angles[2]
