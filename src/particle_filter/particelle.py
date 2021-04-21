@@ -30,12 +30,12 @@ class ParticleFilter:
     def __init__(self):
         self.initialized = False
         rospy.init_node('Particle_Filter')
-        self.base_frame = "base_link"  # the frame of the robot base
-        self.map_frame = "map"  # the name of the map coordinate
+        self.base_frame = "odom"  # the frame of the robot base
+        self.map_frame = "odom"  # the name of the map coordinate
         self.odom_frame = "odom"
         self.scan_topic = "base_scan"
-        self.n_particles = 1500
-        self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
+        self.n_particles = 1000
+        self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=500)
 
         self.particle_cloud = []
 
@@ -52,11 +52,12 @@ class ParticleFilter:
                                                           frame_id=self.map_frame),
                                             poses=particles_conv))
 
-    def initialize_particle_cloud(self, map, xy_theta=(0.0, 0.0, 0.0)): # al posto di 0 0 0 c'è odom
+    def initialize_particle_cloud(self, map, xy_theta=(0.0, 0.0, 0.0)):  # al posto di 0 0 0 c'è odom
         # if xy_theta is None:
         # xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
         rad_min = map.info.width * map.info.resolution / 2  # meters
         rad_max = map.info.height * map.info.resolution / 2
+
         self.particle_cloud = []
         # self.particle_cloud.append(Particle(0.0, 0.0, 0.0))  # origine robot ??
 
@@ -66,20 +67,18 @@ class ParticleFilter:
 
             # compute params to generate x,y in a circle
             # other_theta = random.random() * 360
-            radius_min = random.normalvariate(1, 0.5) * rad_min
-            radius_max = random.normalvariate(1, 0.5) * rad_max
+            radius_min = random.normalvariate(0, 0.5) * rad_min
+            radius_max = random.normalvariate(0, 0.5) * rad_max
 
             x = radius_min + ((map.info.width - map.info.origin.position.x) * map.info.resolution) / 2
             y = radius_max + ((map.info.height - map.info.origin.position.y) * map.info.resolution) / 2
             particle = Particle(x, y, theta)
-            if 0 < (x/map.info.resolution) < map.info.width and 0 < (y/map.info.resolution) < map.info.height:
+            if 0 < (x / map.info.resolution) < map.info.width and 0 < (y / map.info.resolution) < map.info.height:
                 self.particle_cloud.append(particle)
-            else:
-                print(x,y)
+            #else:
+                #print(x, y)
 
         p.publish_particles(self.particle_cloud)
-
-
         return self.particle_cloud
 
 
