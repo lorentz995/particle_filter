@@ -119,8 +119,10 @@ def convert_pose_inverse_transform(pose):
     translation[2] = -pose.position.z
     translation[3] = 1.0
 
-def convert_pose_to_xy_and_theta(pose):
-    """ Convert pose (geometry_msgs.Pose) to a (x,y,yaw) tuple """
-    orientation_tuple = (pose[1][0], pose[1][1], pose[1][2], pose[1][3])
-    angles = euler_from_quaternion(orientation_tuple)
-    return pose[0][0], pose[0][1], angles[2]
+def quaternion_to_angle(q):
+    """Convert a quaternion _message_ into an angle in radians.
+    The angle represents the yaw.
+    This is not just the z component of the quaternion."""
+    x, y, z, w = q.x, q.y, q.z, q.w
+    roll, pitch, yaw = tf.transformations.euler_from_quaternion((x, y, z, w))
+    return yaw

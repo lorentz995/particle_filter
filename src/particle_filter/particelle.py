@@ -6,7 +6,8 @@ from octomap_msgs.srv import GetOctomap
 from std_msgs.msg import Header, String, ColorRGBA
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, Pose, Point, Quaternion, Vector3
-from nav_msgs.srv import GetMap
+from nav_msgs.msg import Odometry
+
 from visualization_msgs.msg import Marker, MarkerArray
 from copy import deepcopy
 
@@ -15,7 +16,7 @@ from tf import TransformListener
 from tf import TransformBroadcaster
 from tf.transformations import euler_from_quaternion, rotation_matrix, quaternion_from_matrix
 from random import gauss
-from particle_filter.utils import Particle
+from particle_filter.utils import *
 from nav_msgs.msg import OccupancyGrid
 
 import math
@@ -35,11 +36,22 @@ class ParticleFilter:
         self.odom_frame = "odom"
         self.scan_topic = "base_scan"
         self.n_particles = 1000
-        self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=500)
 
+        # motion model constants
+        self.motion_variance_x = 0.05
+        self.motion_variance_y = 0.025
+        self.motion_variance_theta = 0.25
+        # Publishers
+        self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
+
+        # Subscribers
+
+        self.odom_sub = rospy.Subscriber("player0/gps/odom", Odometry, self.odom)
         self.particle_cloud = []
 
         # self.current_odom_xy_theta = []
+
+        self.local_deltas = np.zeros((self.n_particles, 3))
 
         self.initialized = True
 
@@ -75,24 +87,41 @@ class ParticleFilter:
             particle = Particle(x, y, theta)
             if 0 < (x / map.info.resolution) < map.info.width and 0 < (y / map.info.resolution) < map.info.height:
                 self.particle_cloud.append(particle)
-            #else:
-                #print(x, y)
+            # else:
+            # print(x, y)
 
         p.publish_particles(self.particle_cloud)
         return self.particle_cloud
 
+    def motion_model(self, proposal_dist, action):  # sostituire action con dim ?
 
-def load_map(map):
-    # occupancy_field = OccupancyField(map)
-    print("second callback")
+        # rotate the action into the coordinate space of each particle
+        # t1 = time.time()
+        cosines = np.cos(proposal_dist[:, 2])
+        sines = np.sin(proposal_dist[:, 2])
 
+        self.local_deltas[:, 0] = cosines * action[0] - sines * action[1]
+        self.local_deltas[:, 1] = sines * action[0] + cosines * action[1]
+        self.local_deltas[:, 2] = action[2]
+
+        proposal_dist[:, :] += self.local_deltas
+        proposal_dist[:, 0] += np.random.normal(loc=0.0, scale=self.motion_variance_x, size=self.n_particles)
+        proposal_dist[:, 1] += np.random.normal(loc=0.0, scale=self.motion_variance_y, size=self.n_particles)
+        proposal_dist[:, 2] += np.random.normal(loc=0.0, scale=self.motion_variance_theta, size=self.n_particles)
+
+    def odom(self, msg):
+        position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+
+        orientation = quaternion_to_angle(msg.pose.pose.orientation)
+        pose = np.array([position[0], position[1], orientation])
+
+        print(pose)
 
 if __name__ == '__main__':
     try:
         p = ParticleFilter()
         time.sleep(0.3)
         rospy.Subscriber("/projected_map", OccupancyGrid, p.initialize_particle_cloud)
-        # rospy.Subscriber("/projected_map", OccupancyGrid, callback)
         rospy.spin()
 
     except rospy.ROSInterruptException:
