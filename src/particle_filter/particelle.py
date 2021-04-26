@@ -36,11 +36,22 @@ class ParticleFilter:
         self.odom_frame = "odom"
         self.scan_topic = "base_scan"
         self.n_particles = 1000
+        self.height = 265
+        self.width = 201  # o il contrario
+
+        self.MAX_RANGE = 3000
+        self.RANGELIB_VAR = 3
 
         # motion model constants
         self.motion_variance_x = 0.05
         self.motion_variance_y = 0.025
         self.motion_variance_theta = 0.25
+        # sensor model constants
+        self.Z_SHORT = 0.01
+        self.Z_MAX = 0.07
+        self.Z_RAND = 0.12
+        self.Z_HIT = 0.75
+        self.SIGMA_HIT = 8.0
 
         self.lidar_angles_x = None
         self.lidar_angles_y = None
@@ -49,6 +60,7 @@ class ParticleFilter:
 
         self.queries = None
         self.ranges = None
+        self.sensor_model_table = None
         # Publishers
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
 
@@ -101,7 +113,7 @@ class ParticleFilter:
         p.publish_particles(self.particle_cloud)
         return self.particle_cloud
 
-    def motion_model(self, proposal_dist, action):  # sostituire action con dim ?
+    def motion_model(self, proposal_dist, action):
 
         # rotate the action into the coordinate space of each particle
         # t1 = time.time()
@@ -117,10 +129,11 @@ class ParticleFilter:
         proposal_dist[:, 1] += np.random.normal(loc=0.0, scale=self.motion_variance_y, size=self.n_particles)
         proposal_dist[:, 2] += np.random.normal(loc=0.0, scale=self.motion_variance_theta, size=self.n_particles)
 
-    def measurement_model(self, proposal_dist, num_rays, obs, weights, map):
+    def measurement_model(self, proposal_dist, obs, weights, map):  # check num_rays, what is?
+        num_rays = 46
         # TODO: che cazzo è num_rays
-        self.lidar_angles_x = np.linspace(-45, 45, 91)
-        self.lidar_angles_y = np.linspace(0, 45, 46)
+        # self.lidar_angles_x = np.linspace(-45, 45, 91)
+        # self.lidar_angles_y = np.linspace(0, 45, 46)
         # self.downsampled_angles = np.copy(self.laser_angles[0::self.ANGLE_STEP]).astype(np.float32)
 
         if self.first_sensor_update:
@@ -136,7 +149,6 @@ class ParticleFilter:
 
         # compute the ranges for all the particles in a single functon call
 
-
         # resolve the sensor model by discretizing and indexing into the precomputed table
         obs /= float(map.info.resolution)
         ranges = self.ranges / float(map.info.resolution)
@@ -147,7 +159,7 @@ class ParticleFilter:
         # compute the weight for each particle
         for i in range(self.n_particles):
             weight = np.product(self.sensor_model_table[intobs, intrng[i * num_rays:(i + 1) * num_rays]])
-            weight = np.power(weight, self.INV_SQUASH_FACTOR)
+            # weight = np.power(weight, self.INV_SQUASH_FACTOR) eleva i pesi per inv_squash (quindi?)
             weights[i] = weight
 
     def odom(self, msg):
@@ -157,6 +169,47 @@ class ParticleFilter:
         pose = np.array([position[0], position[1], orientation])
 
         print(pose)
+
+    def precompute_measurement_model(self):
+        z_short = self.Z_SHORT
+        z_max = self.Z_MAX
+        z_rand = self.Z_RAND
+        z_hit = self.Z_HIT
+        sigma_hit = self.SIGMA_HIT
+
+        table_width = int(self.MAX_RANGE) + 1
+        self.sensor_model_table = np.zeros((table_width, table_width))
+
+        for d in range(table_width):  # controllare se scambiati
+            norm = 0.0
+            sum_unkown = 0.0
+            # r is the observed range from the lidar unit
+            for r in range(table_width):
+                prob = 0.0
+                z = float(r - d)
+                # reflects from the intended object
+                prob += z_hit * np.exp(-(z * z) / (2.0 * sigma_hit * sigma_hit)) / (sigma_hit * np.sqrt(2.0 * np.pi))
+
+                # observed range is less than the predicted range - short reading
+                if r < d:
+                    prob += 2.0 * z_short * (d - r) / float(d)
+
+                # erroneous max range measurement
+                if int(r) == int(self.MAX_RANGE):
+                    prob += z_max
+
+                # random measurement
+                if r < int(self.MAX_RANGE):
+                    prob += z_rand * 1.0 / float(self.MAX_RANGE)
+
+                norm += prob
+                self.sensor_model_table[int(r), int(d)] = prob
+
+            # normalize
+            self.sensor_model_table[:, int(d)] /= norm
+
+        # self.range_method.set_sensor_model(self.sensor_model_table) RANGE_METHOD da problemi
+
 
 
 if __name__ == '__main__':
