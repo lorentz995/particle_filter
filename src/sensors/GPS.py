@@ -130,7 +130,7 @@ class GPS(Sensor):
 
             if self.__path_publisher is not None:
                 curr_ps = PoseStamped()
-                curr_ps.header.stamp = self.__current_time
+                # curr_ps.header.stamp = self.__current_time
                 curr_ps.header.frame_id = self.__odom_frame
                 curr_pose = Pose()
                 curr_pose.position = Point(current_x, current_y, 0.)

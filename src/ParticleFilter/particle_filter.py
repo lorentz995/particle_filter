@@ -39,7 +39,7 @@ class ParticleFilter:
         self.map_listener = rospy.Subscriber("projected_map", OccupancyGrid, self.get_octomap)
         self.pose_listener = rospy.Subscriber("initialpose", PoseWithCovarianceStamped, self.initial_pose)
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
-        # self.lidar_sub = rospy.Subscriber("player0/scan_cloud", PointCloud2, self.lidar_received)
+        self.lidar_sub = rospy.Subscriber("player0/scan_cloud", PointCloud2, self.lidar_received)
         # Setup listener and broadcaster for tf_messages
         self.tf_listener = TransformListener()
         self.tf_broadcaster = TransformBroadcaster()
@@ -130,22 +130,21 @@ class ParticleFilter:
 
         # calculate pose of laser relative ot the robot base
         print("ok")
-        try:
-            p = PoseStamped(header=Header(stamp=rospy.Time(0),
+
+        p = PoseStamped(header=Header(stamp=rospy.Time(0),
                                           frame_id=lidar_msg.header.frame_id))
-            print(p)
-            self.laser_pose = self.tf_listener.transformPose(self.base_frame, p)
+        #print(p)
+        self.laser_pose = self.tf_listener.transformPose(self.base_frame, p)
 
             # find out where the robot thinks it is based on its odometry
-            p = PoseStamped(header=Header(stamp=lidar_msg.header.stamp,
+        p = PoseStamped(header=Header(stamp=lidar_msg.header.stamp,
                                           frame_id=self.base_frame),
                             pose=Pose())
-            self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
-            # store the the odometry pose in a more convenient format (x,y,theta)
-            # new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
-        except:
-            print(p)
-            pass
+        self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
+        # store the the odometry pose in a more convenient format (x,y,theta)
+        new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
+
+
 
     def normalize_particles(self):
         """ Make sure the particle weights define a valid distribution (i.e. sum to 1.0) """
@@ -183,9 +182,9 @@ class ParticleFilter:
         """ This method constantly updates the offset of the map and
             odometry coordinate systems based on the latest results from
             the localizer """
-        (self.translation, self.rotation) = convert_pose_inverse_transform(self.robot_pose)
-        p = PoseStamped(pose=convert_translation_rotation_to_pose(self.translation, self.rotation),
-                        header=Header(stamp=msg.header.stamp, frame_id=self.base_frame))
+        (translation, rotation) = convert_pose_inverse_transform(self.robot_pose)
+        p = PoseStamped(pose=convert_translation_rotation_to_pose(translation, rotation),
+                        header=Header(frame_id=self.base_frame))
         self.odom_to_map = self.tf_listener.transformPose(self.odom_frame, p)
         (self.translation, self.rotation) = convert_pose_inverse_transform(self.odom_to_map.pose)
 
