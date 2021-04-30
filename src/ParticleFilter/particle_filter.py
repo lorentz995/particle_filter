@@ -12,7 +12,7 @@ import random
 import time
 
 import numpy as np
-from numpy.random import random_sample
+from numpy.random import random_sample, normal
 
 
 class ParticleFilter:
@@ -27,6 +27,11 @@ class ParticleFilter:
         # self.scan_topic = "base_scan"  # the topic where we will get laser scans from
 
         self.n_particles = 500  # the number of particles to use
+        self.sigma = 0.08
+
+        self.particle_cloud = []
+
+        self.current_odom_xy_theta = []
 
         # Map parameters
         self.map_initialized = False
@@ -61,6 +66,8 @@ class ParticleFilter:
         # 0: not permissible, 1: permissible
         self.permissible_region = np.zeros_like(array_255, dtype=bool)
         self.permissible_region[array_255 == 0] = 1
+
+        self.occupancy_field = OccupancyField(map_msg)
         self.map_initialized = True
 
     def initial_pose(self, pose_msg):
@@ -143,8 +150,101 @@ class ParticleFilter:
         self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
         # store the the odometry pose in a more convenient format (x,y,theta)
         new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
+        if not(self.particle_cloud):
+            # now that we have all of the necessary transforms we can update the particle cloud
+            self.initialize_particle_cloud()
+            # cache the last odometric pose so we can only update our particle filter if we move more than self.d_thresh or self.a_thresh
+            self.current_odom_xy_theta = new_odom_xy_theta
+            # update our map to odom transform now that the particles are initialized
+            self.fix_map_to_odom_transform(lidar_msg)
+        elif (math.fabs(new_odom_xy_theta[0] - self.current_odom_xy_theta[0]) > 0.2 or
+              math.fabs(new_odom_xy_theta[1] - self.current_odom_xy_theta[1]) > 0.2 or
+              math.fabs(new_odom_xy_theta[2] - self.current_odom_xy_theta[2]) > math.pi/6):
+            # we have moved far enough to do an update!
+            self.update_particles_with_odom(lidar_msg)    # update based on odometry
+            self.update_particles_with_laser(lidar_msg)   # update based on laser scan
+            self.update_robot_pose()                # update robot's pose
+            self.resample_particles()               # resample particles to focus on areas of high density
+            self.fix_map_to_odom_transform(lidar_msg)     # update map to odom transform now that we have new particles
+        # publish particles (so things like rviz can see them)
+        self.publish_particles(lidar_msg)
 
+    def update_particles_with_odom(self, msg):
+        """ Update the particles using the newly given odometry pose.
+            The function computes the value delta which is a tuple (x,y,theta)
+            that indicates the change in position and angle between the odometry
+            when the particles were last updated and the current odometry.
+            msg: this is not really needed to implement this, but is here just in case.
+        """
+        new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
+        # compute the change in x,y,theta since our last update
+        if self.current_odom_xy_theta:
+            old_odom_xy_theta = self.current_odom_xy_theta
+            delta = (new_odom_xy_theta[0] - self.current_odom_xy_theta[0],
+                     new_odom_xy_theta[1] - self.current_odom_xy_theta[1],
+                     new_odom_xy_theta[2] - self.current_odom_xy_theta[2])
 
+            self.current_odom_xy_theta = new_odom_xy_theta
+        else:
+            self.current_odom_xy_theta = new_odom_xy_theta
+            return
+
+        for particle in self.particle_cloud:
+            r1 = math.atan2(delta[1], delta[0]) - old_odom_xy_theta[2]
+            d = math.sqrt((delta[0]**2) + (delta[1]**2))
+
+            particle.theta += r1 % 360
+            particle.x += d * math.cos(particle.theta) + normal(0,0.1)
+            particle.y += d * math.sin(particle.theta) + normal(0,0.1)
+            particle.theta += (delta[2] - r1 + normal(0,0.1)) % 360
+
+    def update_particles_with_laser(self, msg):
+        """ Updates the particle weights in response to the scan contained in the msg """
+        for particle in self.particle_cloud:
+            tot_prob = 0
+            for index, scan in enumerate(msg.ranges):
+                x, y = self.transform_scan(particle, scan, index)
+                # transform scan to view of the particle
+                d = self.occupancy_field.get_closest_obstacle_distance(x, y)
+                # calculate nearest distance to particle's scan (should be near 0 if it's on robot)
+                tot_prob += math.exp((-d ** 2) / (2 * self.sigma ** 2))
+                # add probability (0 to 1) to total probability
+
+            tot_prob = tot_prob / len(msg.ranges)
+            # normalize total probability back to 0-1
+            particle.w = tot_prob
+            # assign particles weight
+    def transform_scan(self, particle, distance, theta):
+        """ Calculates the x and y of a scan from a given particle
+        particle: Particle object
+        distance: scan distance (from ranges)
+        theta: scan angle (range index)
+        """
+        return (particle.x + distance * math.cos(math.radians(particle.theta + theta)),
+                particle.y + distance * math.sin(math.radians(particle.theta + theta)))
+
+    def resample_particles(self):
+        """ Resample the particles according to the new particle weights.
+            The weights stored with each particle should define the probability that a particular
+            particle is selected in the resampling step.  You may want to make use of the given helper
+            function draw_random_sample.
+        """
+        # make sure the distribution is normalized
+        self.normalize_particles()
+
+        newParticles = []
+        for i in range(len(self.particle_cloud)):
+            # resample the same # of particles
+            choice = random_sample()
+            # all the particle weights sum to 1
+            csum = 0 # cumulative sum
+            for particle in self.particle_cloud:
+                csum += particle.w
+                if csum >= choice:
+                    # if the random choice fell within the particle's weight
+                    newParticles.append(deepcopy(particle))
+                    break
+        self.particle_cloud = newParticles
 
     def normalize_particles(self):
         """ Make sure the particle weights define a valid distribution (i.e. sum to 1.0) """
