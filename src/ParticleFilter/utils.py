@@ -85,8 +85,8 @@ class OccupancyField(object):
     def get_closest_obstacle_distance(self, x, y):
         """ Compute the closest obstacle to the specified (x,y) coordinate in the map.  If the (x,y) coordinate
             is out of the map boundaries, nan will be returned. """
-        x_coord = int((x - self.map.origin.position.x / self.map.info.resolution))
-        y_coord = int((y - self.map.origin.position.y / self.map.info.resolution))
+        x_coord = int((x - self.map.info.origin.position.x / self.map.info.resolution))
+        y_coord = int((y - self.map.info.origin.position.y / self.map.info.resolution))
 
         # check if we are in bounds
         if x_coord > self.map.info.width or x_coord < 0:

@@ -77,38 +77,27 @@ class ParticleFilter:
         print("ho fatto initial pose")
 
 
-    def initialize_particle_cloud(self, xy_theta=(0.0, 0.0, 0.0)):  # al posto di 0 0 0 c'è odom
+    def initialize_particle_cloud(self, xy_theta=None):  # al posto di 0 0 0 c'è odom
+        if xy_theta == None:
+            xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
 
-        # if xy_theta is None:
-        # xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
-
-        rad_min = self.map_width * self.map_resolution / 2  # meters
-        rad_max = self.map_width * self.map_resolution / 2
+        rad = 1  # meters
 
         self.particle_cloud = []
-        # self.particle_cloud.append(Particle(0.0, 0.0, 0.0))  # origine robot ??
-
-        while len(self.particle_cloud) < self.n_particles:
+        self.particle_cloud.append(Particle(xy_theta[0], xy_theta[1], xy_theta[2]))
+        for i in range(self.n_particles - 1):
             # initial facing of the particle
             theta = random.random() * 360
 
             # compute params to generate x,y in a circle
-            # other_theta = random.random() * 360
-            radius_min = random.normalvariate(0, 0.5) * rad_min
-            radius_max = random.normalvariate(0, 0.5) * rad_max
-
-            x = radius_min + ((self.map_width - self.map_origin_x) * self.map_resolution) / 2
-            y = radius_max + ((self.map_height - self.map_origin_y) * self.map_resolution) / 2
+            other_theta = random.random() * 360
+            radius = random.random() * rad
+            # x => straight ahead
+            x = radius * math.sin(other_theta) + xy_theta[0]
+            y = radius * math.cos(other_theta) + xy_theta[1]
             particle = Particle(x, y, theta)
-            if 0 < (x / self.map_resolution) < self.map_width and 0 < (y / self.map_resolution) < self.map_height:
-                if self.permissible_region[int(y / self.map_resolution)][int(x / self.map_resolution)]:
-                    self.particle_cloud.append(particle)
+            self.particle_cloud.append(particle)
 
-            # else:
-            # print(x, y)
-
-        self.publish_particles(self.particle_cloud)
-        print("ho pubblicato le particelle")
         self.normalize_particles()
         self.update_robot_pose()
 
@@ -122,10 +111,10 @@ class ParticleFilter:
                                             poses=particles_conv))
 
     def lidar_received(self, lidar_msg):
+        print("lidar ricevuto")
         if not (self.tf_listener.canTransform(self.base_frame, lidar_msg.header.frame_id, lidar_msg.header.stamp)):
             # need to know how to transform the laser to the base frame
             print("base transform error")
-
             return
 
         if not (self.tf_listener.canTransform(self.base_frame, self.odom_frame, lidar_msg.header.stamp)):
@@ -136,17 +125,14 @@ class ParticleFilter:
             return
 
         # calculate pose of laser relative ot the robot base
-        print("ok")
 
-        p = PoseStamped(header=Header(stamp=rospy.Time(0),
-                                          frame_id=lidar_msg.header.frame_id))
-        #print(p)
+        p = PoseStamped(header=Header(stamp=rospy.Time(0), frame_id=lidar_msg.header.frame_id))
+
         self.laser_pose = self.tf_listener.transformPose(self.base_frame, p)
 
-            # find out where the robot thinks it is based on its odometry
-        p = PoseStamped(header=Header(stamp=lidar_msg.header.stamp,
-                                          frame_id=self.base_frame),
-                            pose=Pose())
+        # find out where the robot thinks it is based on its odometry
+        p = PoseStamped(header=Header(stamp=lidar_msg.header.stamp, frame_id=self.base_frame), pose=Pose())
+
         self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
         # store the the odometry pose in a more convenient format (x,y,theta)
         new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
@@ -161,12 +147,19 @@ class ParticleFilter:
               math.fabs(new_odom_xy_theta[1] - self.current_odom_xy_theta[1]) > 0.2 or
               math.fabs(new_odom_xy_theta[2] - self.current_odom_xy_theta[2]) > math.pi/6):
             # we have moved far enough to do an update!
+
             self.update_particles_with_odom(lidar_msg)    # update based on odometry
             self.update_particles_with_laser(lidar_msg)   # update based on laser scan
             self.update_robot_pose()                # update robot's pose
             self.resample_particles()               # resample particles to focus on areas of high density
             self.fix_map_to_odom_transform(lidar_msg)     # update map to odom transform now that we have new particles
+        else:
+            print(math.fabs(new_odom_xy_theta[0] - self.current_odom_xy_theta[0]),
+                  math.fabs(new_odom_xy_theta[1] - self.current_odom_xy_theta[1]),
+                  math.fabs(new_odom_xy_theta[2] - self.current_odom_xy_theta[2]))
+
         # publish particles (so things like rviz can see them)
+        # print("ho pubblicato le particelle")
         self.publish_particles(lidar_msg)
 
     def update_particles_with_odom(self, msg):
@@ -200,9 +193,10 @@ class ParticleFilter:
 
     def update_particles_with_laser(self, msg):
         """ Updates the particle weights in response to the scan contained in the msg """
+        # print(msg.data)
         for particle in self.particle_cloud:
             tot_prob = 0
-            for index, scan in enumerate(msg.ranges):
+            for index, scan in enumerate(msg.data):
                 x, y = self.transform_scan(particle, scan, index)
                 # transform scan to view of the particle
                 d = self.occupancy_field.get_closest_obstacle_distance(x, y)
@@ -210,10 +204,12 @@ class ParticleFilter:
                 tot_prob += math.exp((-d ** 2) / (2 * self.sigma ** 2))
                 # add probability (0 to 1) to total probability
 
-            tot_prob = tot_prob / len(msg.ranges)
+            tot_prob = tot_prob / len(msg.data)
             # normalize total probability back to 0-1
             particle.w = tot_prob
             # assign particles weight
+
+
     def transform_scan(self, particle, distance, theta):
         """ Calculates the x and y of a scan from a given particle
         particle: Particle object
