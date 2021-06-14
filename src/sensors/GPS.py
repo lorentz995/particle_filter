@@ -130,7 +130,7 @@ class GPS(Sensor):
 
             if self.__path_publisher is not None:
                 curr_ps = PoseStamped()
-                # curr_ps.header.stamp = self.__current_time
+                curr_ps.header.stamp = self.__current_time
                 curr_ps.header.frame_id = self.__odom_frame
                 curr_pose = Pose()
                 curr_pose.position = Point(current_x, current_y, 0.)
@@ -146,6 +146,7 @@ class GPS(Sensor):
                         self.__path.append(curr_ps)
                 path = Path()
                 path.header.stamp = self.__current_time
+                # path.header.stamp = rospy.Time.now()
                 path.header.frame_id = self.__odom_frame
                 path.poses = self.__path
                 self.__path_publisher.publish(path)
@@ -156,8 +157,10 @@ class GPS(Sensor):
             odom.header.frame_id = self.__odom_frame
             # set the position
             odom.pose.pose = Pose(Point(current_x, current_y, 0.), Quaternion(*quat))
+
             # set the covariance of the position
             diag = 0.017
+
             odom.pose.covariance = [diag,0.0,0.0,0.0,0.0,0.0,
                                     0.0,diag,0.0,0.0,0.0,0.0,
                                     0.0,0.0,diag,0.0,0.0,0.0,

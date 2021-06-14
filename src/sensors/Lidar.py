@@ -40,7 +40,7 @@ class Lidar(Sensor):
     def build_pc_from_data(self, data):
         h = Header()
         h.frame_id = self.__scan_frame
-        # h.stamp = rospy.Time.now()
+        h.stamp = rospy.Time.now()
 
         pc_message = PointCloud2()
         pc_message.header = h
