@@ -10,7 +10,7 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 
 
 def initialize_particle_cloud(n_particles, map_info, permissible_region, pose):
-    rad = 3  # meters
+    rad = 2  # meters
     particle_cloud = []
     while len(particle_cloud) < n_particles:
         theta = random.random() * 360
@@ -21,8 +21,8 @@ def initialize_particle_cloud(n_particles, map_info, permissible_region, pose):
         # x => straight ahead
         '''x = radius * math.sin(other_theta) + pose[0]
         y = radius * math.cos(other_theta) + pose[1]'''
-        x = random.uniform(pose[0] - radius, pose[0] + radius)
-        y = random.uniform(pose[1] - radius, pose[1] + radius)
+        x = random.uniform(pose[0] - rad, pose[0] + rad)
+        y = random.uniform(pose[1] - rad, pose[1] + rad)
         x_coord = int((x - map_info.origin.position.x) / map_info.resolution)  # formato mappa
         y_coord = int((y - map_info.origin.position.y) / map_info.resolution)
 
@@ -57,13 +57,13 @@ def motion_model(u, old_odom, particle_cloud, sigma_motion_model=0.05):
 def measurement_model(lidar_msg, particle_cloud, map, sigma_likelihood=0.01):
     items, i = len(particle_cloud), 0
     # Initial call to print 0% progress
-    printProgressBar(0, items, prefix='Processing new scan: ', suffix='', length=20)
+    printProgressBar(0, items, prefix='Processing new scan: ', suffix='', length=2)
 
     xyz_cloud = point_cloud2.pointcloud2_to_xyz_array(cloud_msg=lidar_msg)
     if len(xyz_cloud) > 0:
         scans = np.stack(xyz_cloud, axis=0)  # scans is the vector of all received measurement [x,y,z]
         for particle in particle_cloud:
-            printProgressBar(i + 1, items, prefix='Processing new scan:', suffix='', length=20)
+            printProgressBar(i + 1, items, prefix='Processing new scan:', suffix='', length=2)
             i += 1
             x, y, z = scans[:, 0], scans[:, 1], scans[:, 2]
             distances = np.sqrt(x ** 2 + y ** 2 + z ** 2)
@@ -117,26 +117,30 @@ def resample_particles(particle_cloud):
 
 
 def estimate_robot_pose(particle_cloud):
-    x = 0
-    y = 0
-    w = sum([particle.w for particle in particle_cloud]) / len(particle_cloud)
-    print(w)
+    x_ = []
+    y_ = []
+    # w = sum([particle.w for particle in particle_cloud]) / len(particle_cloud)
     angles = []
     for particle in particle_cloud:
-        if particle.w >= w:
-            x += particle.x * particle.w
-            y += particle.y * particle.w
-            v = [particle.w * math.cos(math.radians(particle.theta)),
-                 particle.w * math.sin(math.radians(particle.theta))]
-            angles.append(v)
+        x_.append(particle.x)
+        y_.append(particle.y)
+        v = [math.cos(math.radians(particle.theta)),
+             math.sin(math.radians(particle.theta))]
+        angles.append(math.atan2(v[1], v[0]))
 
-    tot_vector = np.sum(angles, axis=0)
+    x = np.mean(x_)
+    y = np.mean(y_)
+    var_x = np.sum((x_ - x) ** 2) / len(particle_cloud)
+    var_y = np.sum((y_ - y) ** 2) / len(particle_cloud)
+    print(var_x, var_y)
+    angle = np.mean(angles)
     # sum vectors
-    angle = math.atan2(tot_vector[1], tot_vector[0])
+
     # comes in radians for -pi to pi
-    theta = math.degrees(angle) + 180
-    orientation_tuple = tf.transformations.quaternion_from_euler(0, 0, theta)
+    # theta = math.degrees(angle)
+    orientation_tuple = tf.transformations.quaternion_from_euler(0, 0, angle)
     robot_pose = Pose(position=Point(x=x, y=y),
                       orientation=Quaternion(x=orientation_tuple[0], y=orientation_tuple[1],
                                              z=orientation_tuple[2], w=orientation_tuple[3]))
-    return robot_pose
+
+    return robot_pose, math.sqrt(var_x ** 2 + var_y ** 2)

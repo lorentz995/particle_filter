@@ -6,7 +6,7 @@ from ParticleFilter.utils import publish_particles, normalize_particles, \
     pose_to_xytheta, bcolors
 from ParticleFilter.models import *
 from tf import TransformListener
-from nav_msgs.msg import Path
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2
 from geometry_msgs.msg import PoseArray, Twist, Vector3, PoseStamped, Pose, PoseWithCovarianceStamped
 from std_msgs.msg import Header, ColorRGBA
@@ -26,11 +26,10 @@ class ParticleFilter:
         # Setup publishers and subscribers
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10, latch=True)
         self.marker_pub = rospy.Publisher("weighs", MarkerArray, queue_size=10, latch=True)
-        self.path_pub = rospy.Publisher('/robot_path', Path, queue_size=10, latch=True)
+        self.pose_pub = rospy.Publisher('/robot_pose', Odometry, queue_size=10, latch=False)
         # self.stoprobot = rospy.Publisher("player0/cmd_vel", Twist, queue_size=10)
         self.map = Map()
-        self.path = Path()
-        self.path.header.frame_id = self.odom_frame
+
         self.permissible_area, self.map_info = self.map.get_map_info()
 
         self.pose_listener = rospy.Subscriber("initialpose", PoseWithCovarianceStamped, self.initial_pose)
@@ -44,7 +43,8 @@ class ParticleFilter:
                                                         self.permissible_area, xy_theta)
         self.particle_cloud = normalize_particles(self.particle_cloud)
         publish_particles(self.particle_pub, self.marker_pub, self.particle_cloud, self.odom_frame)
-        self.path_pub.publish(self.path)
+
+        self.iterations = 0
         self.initialized = True
 
     def lidar_scan(self, lidar_msg):
@@ -69,8 +69,8 @@ class ParticleFilter:
         if (rospy.Time.now() - lidar_msg.header.stamp).to_sec() >= 0.1:
             delay = (rospy.Time.now() - lidar_msg.header.stamp).to_sec()
 
-            print(bcolors.WARNING + "Delay of {:0.2f} seconds. Discarding this transformation!".format(
-                delay) + bcolors.ENDC)
+            # print(bcolors.WARNING + "Delay of {:0.2f} seconds. Discarding this transformation!".format(
+            #  delay) + bcolors.ENDC)
             return
 
         try:
@@ -109,13 +109,27 @@ class ParticleFilter:
                 publish_particles(self.particle_pub, self.marker_pub, self.particle_cloud, self.odom_frame)
 
                 # Robot trajectory
-                pose = PoseStamped()
-                pose.pose = estimate_robot_pose(self.particle_cloud)
-
+                robot_pose = PoseStamped()
+                robot_pose.pose, var = estimate_robot_pose(self.particle_cloud)
+                self.iterations += 1
                 # Creating Path msg
-                self.path.header.stamp = rospy.Time.now()
-                self.path.poses.append(pose)
-                self.path_pub.publish(self.path)
+                if self.iterations > 0:
+                    odom = Odometry()
+                    odom.header.stamp = rospy.Time.now()
+                    odom.header.frame_id = self.odom_frame
+                    # set the position
+                    odom.pose.pose = robot_pose.pose
+                    # set the covariance of the position
+                    diag = 0.1  # TODO: calcolare diag automaticamente dalla varianza delle particelle
+
+                    odom.pose.covariance = [var, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, var, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, var, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, var, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, var, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, var]
+
+                    self.pose_pub.publish(odom)
 
         else:
             self.current_odom = new_odom
