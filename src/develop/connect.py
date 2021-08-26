@@ -12,9 +12,9 @@ def start_node():
 	rospy.init_node("connect_node", anonymous=True)
 	message = ConnectionMessage()
 	message.ports = [9734]
-	message.json_settings = ['{ "sensor_settings": { "CarEncoder": {}, "RGBCamera": { "width": 240, "height": 240, "channels": "RGB", "FOV" : 90, "show": false }, "Laser": { "start_angle_x": -135.0, "end_angle_x": 135.0, "distance_angle_x": 0.2, "start_angle_y": 0.0, "end_angle_y": 0.0, "distance_angle_y": 1.0, "laser_range": 4000.0, "render": -1 }, "GPS": {}, "Lidar": { "start_angle_x": -45.0, "end_angle_x": 45.0, "distance_angle_x": 3, "start_angle_y": 0.0, "end_angle_y": 45.0, "distance_angle_y": 5, "lidar_range": 3000.0 , "render": -1} }, "action_manager_settings": { "ContinuousActionManager": { "command_dict": { "TURN": 0, "STRAIGHT": 1 }, "settings": { } } }, "reset_manager_settings": { "TrackerResetManager": {} }, "observations_step": ["GPS", "RGBCamera", "Lidar"], "observations_reset": ["RGBCamera"] }']
+	message.json_settings = ['{ "sensor_settings": { "CarEncoder": {}, "RGBCamera": { "width": 240, "height": 240, "channels": "RGB", "FOV" : 90, "show": false }, "Laser": { "start_angle_x": -135.0, "end_angle_x": 135.0, "distance_angle_x": 0.2, "start_angle_y": 0.0, "end_angle_y": 0.0, "distance_angle_y": 1.0, "laser_range": 4000.0, "render": -1 }, "GPS": {}, "Lidar": { "start_angle_x": -45, "end_angle_x": 45, "distance_angle_x": 0.5, "start_angle_y": 0.0, "end_angle_y": 30.0, "distance_angle_y": 1, "lidar_range": 4000.0 , "render": -1} }, "action_manager_settings": { "ContinuousActionManager": { "command_dict": { "TURN": 0, "STRAIGHT": 1 }, "settings": { } } }, "reset_manager_settings": { "TrackerResetManager": {} }, "observations_step": ["GPS", "RGBCamera", "Lidar"], "observations_reset": ["RGBCamera"] }']
 	message.render = True
-	message.address = '172.26.16.1'
+	message.address = '192.168.208.1'
 	resp = connect_service(message)
 	print(resp)
 
