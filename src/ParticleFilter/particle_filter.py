@@ -26,7 +26,7 @@ class ParticleFilter:
         # Setup publishers and subscribers
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10, latch=True)
         self.marker_pub = rospy.Publisher("weighs", MarkerArray, queue_size=10, latch=True)
-        self.pose_pub = rospy.Publisher('/robot_pose', Odometry, queue_size=10, latch=False)
+        self.pose_pub = rospy.Publisher('/robot_pose', PoseWithCovarianceStamped, queue_size=10)
         # self.stoprobot = rospy.Publisher("player0/cmd_vel", Twist, queue_size=10)
         self.map = Map()
 
@@ -109,27 +109,30 @@ class ParticleFilter:
                 publish_particles(self.particle_pub, self.marker_pub, self.particle_cloud, self.odom_frame)
 
                 # Robot trajectory
-                robot_pose = PoseStamped()
-                robot_pose.pose, var = estimate_robot_pose(self.particle_cloud)
-                self.iterations += 1
-                # Creating Path msg
-                if self.iterations > 0:
-                    odom = Odometry()
+                robot_pose = PoseWithCovarianceStamped()
+                self.particle_cloud = normalize_particles(self.particle_cloud)
+                robot_pose.pose, var_x, var_y = estimate_robot_pose(self.particle_cloud)
+
+                # Creating Pose msg only if covariance of estimated pose is less of certain threshold
+                if math.sqrt(var_x ** 2 + var_y ** 2) < 1.0:
+                    print(bcolors.HEADER + "New estimated robot pose" + bcolors.ENDC)
+                    odom = PoseWithCovarianceStamped()
                     odom.header.stamp = rospy.Time.now()
                     odom.header.frame_id = self.odom_frame
                     # set the position
                     odom.pose.pose = robot_pose.pose
                     # set the covariance of the position
-                    diag = 0.1  # TODO: calcolare diag automaticamente dalla varianza delle particelle
 
-                    odom.pose.covariance = [var, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                            0.0, var, 0.0, 0.0, 0.0, 0.0,
-                                            0.0, 0.0, var, 0.0, 0.0, 0.0,
-                                            0.0, 0.0, 0.0, var, 0.0, 0.0,
-                                            0.0, 0.0, 0.0, 0.0, var, 0.0,
-                                            0.0, 0.0, 0.0, 0.0, 0.0, var]
+                    odom.pose.covariance = [var_x, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, var_y, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
                     self.pose_pub.publish(odom)
+                else:
+                    print(bcolors.WARNING + "Uncertainty too high to estimate a new pose of the robot" + bcolors.ENDC)
 
         else:
             self.current_odom = new_odom

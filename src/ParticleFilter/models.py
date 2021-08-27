@@ -117,30 +117,28 @@ def resample_particles(particle_cloud):
 
 
 def estimate_robot_pose(particle_cloud):
-    x_ = []
-    y_ = []
-    # w = sum([particle.w for particle in particle_cloud]) / len(particle_cloud)
-    angles = []
+    x = 0
+    y = 0
+    theta = 0
     for particle in particle_cloud:
-        x_.append(particle.x)
-        y_.append(particle.y)
-        v = [math.cos(math.radians(particle.theta)),
-             math.sin(math.radians(particle.theta))]
-        angles.append(math.atan2(v[1], v[0]))
+        x += particle.x * particle.w
+        y += particle.y * particle.w
+        theta += particle.theta
+    theta /= len(particle_cloud)
+        #angles.append(v)
 
-    x = np.mean(x_)
-    y = np.mean(y_)
-    var_x = np.sum((x_ - x) ** 2) / len(particle_cloud)
-    var_y = np.sum((y_ - y) ** 2) / len(particle_cloud)
-    print(var_x, var_y)
-    angle = np.mean(angles)
+        # tot_vector = np.sum(angles, axis=0)
+
     # sum vectors
+    # angle = math.atan2(tot_vector[1], tot_vector[0])
+    theta = math.degrees(theta)
+    # print(theta)
+    var_x = sum(particle.w * ((particle.x - x) ** 2) for particle in particle_cloud)
+    var_y = sum(particle.w * ((particle.y - y) ** 2) for particle in particle_cloud)
 
-    # comes in radians for -pi to pi
-    # theta = math.degrees(angle)
-    orientation_tuple = tf.transformations.quaternion_from_euler(0, 0, angle)
+    orientation_tuple = tf.transformations.quaternion_from_euler(0, 0, math.radians(theta))
     robot_pose = Pose(position=Point(x=x, y=y),
                       orientation=Quaternion(x=orientation_tuple[0], y=orientation_tuple[1],
                                              z=orientation_tuple[2], w=orientation_tuple[3]))
 
-    return robot_pose, math.sqrt(var_x ** 2 + var_y ** 2)
+    return robot_pose, var_x, var_y
