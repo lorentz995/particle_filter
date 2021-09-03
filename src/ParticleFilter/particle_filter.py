@@ -18,7 +18,7 @@ class ParticleFilter:
         self.initialized = False
         self.base_frame = "base_link"  # the frame of the robot base
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
-        self.n_particles = 1000  # the number of particles to use
+        self.n_particles = 10000  # the number of particles to use
         self.particle_cloud = []
         self.current_odom = []
         self.tf_listener = TransformListener()
@@ -120,6 +120,7 @@ class ParticleFilter:
                     odom.header.stamp = rospy.Time.now()
                     odom.header.frame_id = self.odom_frame
                     # set the position
+
                     odom.pose.pose = robot_pose.pose
                     # set the covariance of the position
 

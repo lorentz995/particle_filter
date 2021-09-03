@@ -37,8 +37,8 @@ class Particle(object):
         """ A helper function to convert a particle to a geometry_msgs/Pose message """
         orientation_tuple = tf.transformations.quaternion_from_euler(0, 0, self.theta)
         return Pose(position=Point(x=self.x, y=self.y, z=0),
-                    orientation=Quaternion(x=orientation_tuple[0], y=orientation_tuple[1], z=orientation_tuple[2],
-                                           w=orientation_tuple[3]))
+                    orientation=Quaternion(x=orientation_tuple[0], y=orientation_tuple[1],
+                                           z=orientation_tuple[2], w=orientation_tuple[3]))
 
 
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='', printEnd="\r"):
