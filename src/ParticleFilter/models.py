@@ -109,7 +109,7 @@ def resample_particles(particle_cloud, avg, odom_pose, avg_threshold=0.2, max_pa
             y = random.uniform(map_info.origin.position.y,
                                map_info.height * map_info.resolution + map_info.origin.position.y)'''
 
-            particle = Particle(x, y, theta, 1 / 500)
+            particle = Particle(x, y, theta, 1 / max_particles)
             newParticles.append(particle)
             num_particles += 1
         else:  # End of kidnapping
