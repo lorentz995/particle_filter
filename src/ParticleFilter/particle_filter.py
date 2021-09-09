@@ -44,18 +44,17 @@ class ParticleFilter:
 
         self.initialized = True
 
-    def velocity(self, vel, alpha1=0.1, alpha2 = 0.05, alpha3=0.05, alpha4=0.1):
+    def velocity(self, vel, alpha1=0.1, alpha2=0.05, alpha3=0.05, alpha4=0.1):
         v = vel.linear.x
         w = vel.angular.z
         if v != 0 or w != 0:
-            self.sigma_v = alpha1 * v**2 + alpha2 * w**2
-            self.sigma_w = alpha3 * v**2 + alpha4 * w**2
-            print(self.sigma_v, self.sigma_w)
+            self.sigma_v = alpha1 * v ** 2 + alpha2 * w ** 2
+            self.sigma_w = alpha3 * v ** 2 + alpha4 * w ** 2
 
     def lidar_scan(self, lidar_msg):
         # print("Lidar scan received...")
         if not self.initialized:
-            # print(bcolors.OKCYAN + "Ready! Please insert initial pose from rviz" + bcolors.ENDC)
+            print(bcolors.OKCYAN + "Ready! Please insert initial pose from rviz" + bcolors.ENDC)
             return
 
         # need to know how to transform the lidar to the base frame
