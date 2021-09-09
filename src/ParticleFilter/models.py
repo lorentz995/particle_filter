@@ -8,23 +8,28 @@ from copy import deepcopy
 import tf
 from geometry_msgs.msg import Pose, Point, Quaternion
 
+global num_iteration
+
 
 def initialize_particle_cloud(n_particles, map_info, permissible_region, pose):
-    rad = 2  # meters
+    global num_iteration
+    num_iteration = 0
+    rad = 1.5  # meters
     particle_cloud = []
     while len(particle_cloud) < n_particles:
         theta = random.random() * (2 * math.pi)
 
-        '''x = random.uniform(pose[0] - rad, pose[0] + rad)
+        x = random.uniform(pose[0] - rad, pose[0] + rad)
         y = random.uniform(pose[1] - rad, pose[1] + rad)
-        '''
 
-        x = random.uniform(map_info.origin.position.x,
+        ''' Uncomment this if you want uniform distribution over the map, comment the previous two lines'''
+
+        '''x = random.uniform(map_info.origin.position.x,
                            map_info.width * map_info.resolution + map_info.origin.position.x)
         y = random.uniform(map_info.origin.position.y,
-                           map_info.height * map_info.resolution + map_info.origin.position.y)
+                           map_info.height * map_info.resolution + map_info.origin.position.y)'''
 
-        x_coord = int((x - map_info.origin.position.x) / map_info.resolution)  # formato mappa
+        x_coord = int((x - map_info.origin.position.x) / map_info.resolution)
         y_coord = int((y - map_info.origin.position.y) / map_info.resolution)
 
         try:
@@ -38,21 +43,21 @@ def initialize_particle_cloud(n_particles, map_info, permissible_region, pose):
     return particle_cloud
 
 
-def motion_model(u, old_odom, particle_cloud, sigma_motion_model=0.05):
+def motion_model(u, old_odom, particle_cloud, sigma_v_motion_model, sigma_w_motion_model):
     for particle in particle_cloud:
-        r1 = math.atan2(u[1], u[0]) - old_odom[2]  # orientamento
-        d = math.sqrt((u[0] ** 2) + (u[1] ** 2))  # spostamento
+        r1 = math.atan2(u[1], u[0]) - old_odom[2]
+        d = math.sqrt((u[0] ** 2) + (u[1] ** 2))
         r2 = u[2] - r1
 
-        particle.x += d * math.cos(particle.theta + r1) + normal(0, sigma_motion_model)
-        particle.y += d * math.sin(particle.theta + r1) + normal(0, sigma_motion_model)
-        particle.theta += (r1 + r2) + normal(0, sigma_motion_model)
+        particle.x += d * math.cos(particle.theta + r1) + normal(0, sigma_v_motion_model)
+        particle.y += d * math.sin(particle.theta + r1) + normal(0, sigma_v_motion_model)
+        particle.theta += (r1 + r2) + normal(0, sigma_w_motion_model)
     return particle_cloud
 
 
 def measurement_model(lidar_msg, particle_cloud, map, sigma_likelihood=0.01):
     items, i = len(particle_cloud), 0
-    # Initial call to print 0% progress
+    # Display a progress bar
     printProgressBar(0, items, prefix='Processing new scan: ', suffix='', length=2)
 
     xyz_cloud = point_cloud2.pointcloud2_to_xyz_array(cloud_msg=lidar_msg)
@@ -63,8 +68,7 @@ def measurement_model(lidar_msg, particle_cloud, map, sigma_likelihood=0.01):
             i += 1
             x, y, z = scans[:, 0], scans[:, 1], scans[:, 2]
             distances = np.sqrt(x ** 2 + y ** 2 + z ** 2)
-            # distances = np.sqrt(x ** 2 + y ** 2)
-            angles = np.arctan2(y, x)  # gradi?
+            angles = np.arctan2(y, x)
 
             x_part = particle.x + distances * np.cos(particle.theta + angles)
             y_part = particle.y + distances * np.sin(particle.theta + angles)
@@ -75,7 +79,7 @@ def measurement_model(lidar_msg, particle_cloud, map, sigma_likelihood=0.01):
             particle.w = np.mean(wk)
 
             permissible_area, map_info = map.get_map_info()
-            x_coord = int((particle.x - map_info.origin.position.x) / map_info.resolution)  # formato mappa
+            x_coord = int((particle.x - map_info.origin.position.x) / map_info.resolution)
             y_coord = int((particle.y - map_info.origin.position.y) / map_info.resolution)
             # Check if particle is out of map bound
             if not (0 <= x_coord < map_info.width) or not (0 <= y_coord < map_info.height):
@@ -85,31 +89,39 @@ def measurement_model(lidar_msg, particle_cloud, map, sigma_likelihood=0.01):
     return particle_cloud
 
 
-def resample_particles(particle_cloud):
-    '''newParticles = [] metodo prof
-    max_particles = 0
+def resample_particles(particle_cloud, avg, odom_pose, avg_threshold=0.2, max_particles=500):
+    global num_iteration
+    rad = 1.5
+    num_iteration += 1
+    num_particles = 0
+    newParticles = []
     for i in range(len(particle_cloud)):
-        chance = random_sample()  # * self.normalizer
-        j = -1
-        s = 0.0
-        while (s < chance) and (j < len(particle_cloud) - 1):
-            j += 1
-            s += particle_cloud[j].w
-        newParticles.append(deepcopy(particle_cloud[j]))
-    return newParticles'''
+        # Kidnapping
+        if avg < avg_threshold and num_particles < max_particles and num_iteration % 10 == 0:
+            theta = random.random() * (2 * math.pi)
+            x = random.uniform(odom_pose.pose.position.x - rad, odom_pose.pose.position.x + rad)
+            y = random.uniform(odom_pose.pose.position.y - rad, odom_pose.pose.position.y + rad)
 
-    newParticles = []  # metodo fast
-    for i in range(len(particle_cloud)):
-        # resample the same # of particles
-        choice = random_sample()
-        # all the particle weights sum to 1
-        csum = 0  # cumulative sum
-        for particle in particle_cloud:
-            csum += particle.w
-            if csum >= choice:
-                # if the random choice fell within the particle's weight
-                newParticles.append(deepcopy(particle))
-                break
+            ''' Uncomment this if you want uniform distribution over the map, comment the previous two lines'''
+
+            '''x = random.uniform(map_info.origin.position.x,
+                               map_info.width * map_info.resolution + map_info.origin.position.x)
+            y = random.uniform(map_info.origin.position.y,
+                               map_info.height * map_info.resolution + map_info.origin.position.y)'''
+
+            particle = Particle(x, y, theta, 1 / 500)
+            newParticles.append(particle)
+            num_particles += 1
+        else:  # End of kidnapping
+
+            choice = random_sample()
+            csum = 0
+            for particle in particle_cloud:
+                csum += particle.w
+                if csum >= choice:
+                    # if the random choice fell within the particle's weight
+                    newParticles.append(deepcopy(particle))
+                    break
     return newParticles
 
 

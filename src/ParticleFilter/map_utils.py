@@ -15,7 +15,6 @@ class Map:
         self.map_pub = rospy.Publisher("map", OccupancyGrid, queue_size=100, latch=True)
         self.map_pub.publish(self.map)
 
-
         """ Likelihood Field model """
         # The coordinates of each grid cell in the map
         X = np.zeros((self.map.info.width * self.map.info.height, 2))
@@ -63,11 +62,11 @@ class Map:
     def get_map_info(self):
         # 0: permissible, -1: unmapped, 100: blocked
         array_255 = np.array(self.map.data).reshape(self.map.info.height, self.map.info.width)
-        # array_255 = np.where(array_255 == -1, 0, array_255)
+        # array255 = np.rot90(array_255) # uncomment if you have to rotate 90 degrees clockwise
         # 0: not permissible, 1: permissible
         self.permissible_region = np.zeros_like(array_255, dtype=bool)
         self.permissible_region[array_255 == 0] = 1
-        # array255 = np.rot90(array_255) # uncomment if you want to rotate 90 degrees clockwise
+
 
         return self.permissible_region, self.map.info
 
@@ -75,10 +74,9 @@ class Map:
         """ Compute the closest obstacle to the specified (x,y) coordinate in
             the map.  If the (x,y) coordinate is out of the map boundaries, nan
             will be returned. """
-        x_coord = (x - self.map.info.origin.position.x)/self.map.info.resolution
-        y_coord = (y - self.map.info.origin.position.y)/self.map.info.resolution
-        # x_coord = x / self.map.info.resolution
-        # y_coord = y / self.map.info.resolution
+        x_coord = (x - self.map.info.origin.position.x) / self.map.info.resolution
+        y_coord = (y - self.map.info.origin.position.y) / self.map.info.resolution
+
         if type(x) is np.ndarray:
             x_coord = x_coord.astype(np.int)
             y_coord = y_coord.astype(np.int)
@@ -93,9 +91,3 @@ class Map:
             return distances
         else:
             return self.closest_occ[x_coord, y_coord] if is_valid else float('nan')
-
-
-if __name__ == '__main__':
-    rospy.init_node('test_map')
-    m = Map()
-    rospy.spin()

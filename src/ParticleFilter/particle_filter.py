@@ -2,14 +2,12 @@
 import rospy
 from visualization_msgs.msg import MarkerArray
 from ParticleFilter.map_utils import Map
-from ParticleFilter.utils import publish_particles, normalize_particles, \
-    pose_to_xytheta, bcolors
+from ParticleFilter.utils import publish_particles, normalize_particles, pose_to_xytheta, bcolors
 from ParticleFilter.models import *
 from tf import TransformListener
-from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2
-from geometry_msgs.msg import PoseArray, Twist, Vector3, PoseStamped, Pose, PoseWithCovarianceStamped
-from std_msgs.msg import Header, ColorRGBA
+from geometry_msgs.msg import PoseArray, Twist, PoseStamped, Pose, PoseWithCovarianceStamped
+from std_msgs.msg import Header
 
 
 class ParticleFilter:
@@ -18,7 +16,7 @@ class ParticleFilter:
         self.initialized = False
         self.base_frame = "base_link"  # the frame of the robot base
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
-        self.n_particles = 10000  # the number of particles to use
+        self.n_particles = 1000  # the number of particles to use
         self.particle_cloud = []
         self.current_odom = []
         self.tf_listener = TransformListener()
@@ -27,7 +25,7 @@ class ParticleFilter:
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10, latch=True)
         self.marker_pub = rospy.Publisher("weighs", MarkerArray, queue_size=10, latch=True)
         self.pose_pub = rospy.Publisher('/robot_pose', PoseWithCovarianceStamped, queue_size=10)
-        # self.stoprobot = rospy.Publisher("player0/cmd_vel", Twist, queue_size=10)
+        self.vel_sub = rospy.Subscriber("player0/cmd_vel", Twist, self.velocity)
         self.map = Map()
 
         self.permissible_area, self.map_info = self.map.get_map_info()
@@ -44,13 +42,20 @@ class ParticleFilter:
         self.particle_cloud = normalize_particles(self.particle_cloud)
         publish_particles(self.particle_pub, self.marker_pub, self.particle_cloud, self.odom_frame)
 
-        self.iterations = 0
         self.initialized = True
+
+    def velocity(self, vel, alpha1=0.1, alpha2 = 0.05, alpha3=0.05, alpha4=0.1):
+        v = vel.linear.x
+        w = vel.angular.z
+        if v != 0 or w != 0:
+            self.sigma_v = alpha1 * v**2 + alpha2 * w**2
+            self.sigma_w = alpha3 * v**2 + alpha4 * w**2
+            print(self.sigma_v, self.sigma_w)
 
     def lidar_scan(self, lidar_msg):
         # print("Lidar scan received...")
         if not self.initialized:
-            print(bcolors.OKCYAN + "Ready! Please insert initial pose from rviz" + bcolors.ENDC)
+            # print(bcolors.OKCYAN + "Ready! Please insert initial pose from rviz" + bcolors.ENDC)
             return
 
         # need to know how to transform the lidar to the base frame
@@ -67,10 +72,7 @@ class ParticleFilter:
                                       frame_id=self.base_frame), pose=Pose())
 
         if (rospy.Time.now() - lidar_msg.header.stamp).to_sec() >= 0.1:
-            delay = (rospy.Time.now() - lidar_msg.header.stamp).to_sec()
-
-            # print(bcolors.WARNING + "Delay of {:0.2f} seconds. Discarding this transformation!".format(
-            #  delay) + bcolors.ENDC)
+            # discard transformations that are too late
             return
 
         try:
@@ -79,6 +81,7 @@ class ParticleFilter:
                                               time=lidar_msg.header.stamp,
                                               timeout=rospy.Duration(1))
             self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
+
         except:
             print(bcolors.FAIL + "Error during last transformation!" + bcolors.ENDC)
 
@@ -98,14 +101,19 @@ class ParticleFilter:
                     abs(control_action[1]) > 0.001 or
                     abs(control_action[2]) > 0.001):
                 self.particle_cloud = motion_model(u=control_action, old_odom=self.old_odom,
-                                                   particle_cloud=self.particle_cloud)
+                                                   particle_cloud=self.particle_cloud,
+                                                   sigma_v_motion_model=self.sigma_v,
+                                                   sigma_w_motion_model=self.sigma_w)
 
                 self.particle_cloud = measurement_model(lidar_msg=lidar_msg,
                                                         particle_cloud=self.particle_cloud,
                                                         map=self.map)
 
+                avg = sum(particle.w for particle in self.particle_cloud) / len(self.particle_cloud)
                 self.particle_cloud = normalize_particles(self.particle_cloud)
-                self.particle_cloud = resample_particles(self.particle_cloud)
+
+                self.particle_cloud = resample_particles(self.particle_cloud, avg, self.odom_pose)
+
                 publish_particles(self.particle_pub, self.marker_pub, self.particle_cloud, self.odom_frame)
 
                 # Robot trajectory
@@ -114,7 +122,7 @@ class ParticleFilter:
                 robot_pose.pose, var_x, var_y = estimate_robot_pose(self.particle_cloud)
 
                 # Creating Pose msg only if covariance of estimated pose is less of certain threshold
-                if math.sqrt(var_x ** 2 + var_y ** 2) < 1.0:
+                if math.sqrt(var_x ** 2 + var_y ** 2) < 0.5:
                     print(bcolors.HEADER + "New estimated robot pose" + bcolors.ENDC)
                     odom = PoseWithCovarianceStamped()
                     odom.header.stamp = rospy.Time.now()
